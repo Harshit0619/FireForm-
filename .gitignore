@@ -49,8 +49,9 @@ data/inputs/*
 # Locally generated LLM credential-encryption key
 data/secrets/
 
-# PyInstaller & build artifacts
+# PyInstaller build outputs
 build/
 dist/
-*.spec
 .pyinstaller_cache/
+*.spec.bak
+*.spec
