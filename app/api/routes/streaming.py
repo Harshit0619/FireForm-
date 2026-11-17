@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from urllib.parse import parse_qs
 
@@ -199,6 +200,7 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
                         text = " ".join(s.get("text", "") for s in data["segments"] if isinstance(s, dict)).strip()
 
                 if text:
+                    text = re.sub(r"\s+", " ", text).strip()
                     transcript_state["latest_transcript"] = text
                     await websocket.send_json({
                         "type": "interim",
@@ -250,7 +252,7 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
 
     # Finalize transcription: if streaming produced a hypothesis, use it;
     # otherwise transcribe accumulated PCM audio directly as fallback.
-    final_transcript = transcript_state["latest_transcript"].strip()
+    final_transcript = re.sub(r"\s+", " ", transcript_state["latest_transcript"]).strip()
 
     if not final_transcript and accumulated_audio_bytes:
         try:
@@ -270,7 +272,7 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
                 None,
                 lambda: call_whisper_asr(wav_bytes, "recording.wav", "audio/wav"),
             )
-            final_transcript = (final_transcript or "").strip()
+            final_transcript = re.sub(r"\s+", " ", final_transcript or "").strip()
         except Exception as exc:
             logger.warning("Fallback transcription failed: %s", exc)
 
