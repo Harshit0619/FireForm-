@@ -25,3 +25,4 @@ geopy
 alembic
 reportlab
 slowapi
+websockets

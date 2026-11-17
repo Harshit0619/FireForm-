@@ -56,8 +56,7 @@ def _check_llm() -> ComponentHealth:
 
 
 def _check_whisper() -> ComponentHealth:
-    # The onerahmet/openai-whisper-asr-webservice image does not expose /health.
-    # Both compose files probe /docs (a FastAPI auto-endpoint always present).
+    # Probes /docs (a FastAPI auto-endpoint always present in both faster-whisper-server and onerahmet)
     t0 = time.monotonic()
     try:
         resp = requests.get(f"{WHISPER_HOST}/docs", timeout=_PROBE_TIMEOUT)

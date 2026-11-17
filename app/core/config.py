@@ -73,6 +73,15 @@ LLM_PROVIDER_ENV = {
 }
 
 WHISPER_HOST = os.getenv("WHISPER_HOST", "http://localhost:9000").rstrip("/")
+WHISPER_ENABLED = os.getenv("WHISPER_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# --- Real-Time Streaming ASR -----------------------------------------------
+FIREFORM_STREAMING_ENABLED = os.getenv("FIREFORM_STREAMING_ENABLED", "true").lower() in ("true", "1", "yes")
+_DEFAULT_WHISPER_WS = (
+    WHISPER_HOST.replace("https://", "wss://").replace("http://", "ws://")
+    + "/v1/audio/transcriptions"
+)
+WHISPER_WS_URL = os.getenv("WHISPER_WS_URL", _DEFAULT_WHISPER_WS)
 
 # --- Celery / Redis -------------------------------------------------------
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
