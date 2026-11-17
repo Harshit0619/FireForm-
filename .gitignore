@@ -54,3 +54,4 @@ build/
 dist/
 .pyinstaller_cache/
 *.spec.bak
+*.spec

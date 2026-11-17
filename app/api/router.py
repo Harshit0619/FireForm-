@@ -8,6 +8,7 @@ from app.api.routes import (
     llm_config,
     profiles,
     reports,
+    streaming,
     system,
     templates,
     weather,
@@ -28,3 +29,4 @@ api_router.include_router(input.router, prefix=API_PREFIX)
 api_router.include_router(profiles.router, prefix=API_PREFIX)
 api_router.include_router(profiles.router)
 api_router.include_router(reports.router, prefix=API_PREFIX)
+api_router.include_router(streaming.router, prefix=API_PREFIX)

@@ -17,25 +17,26 @@ services:
       start_period: 30s
 
   whisper:
-    image: onerahmet/openai-whisper-asr-webservice:latest
+    image: fedirz/faster-whisper-server:latest-cpu
     container_name: fireform-whisper
     environment:
-      - ASR_ENGINE=faster_whisper
-      - ASR_MODEL=${WHISPER_MODEL}
-      - ASR_MODEL_PATH=/data/whisper
+      - WHISPER__MODEL=${WHISPER_MODEL:-Systran/faster-whisper-tiny}
+      - WHISPER__DEVICE=cpu
+      - WHISPER__COMPUTE_TYPE=int8
     volumes:
-      - whisper_models:/data/whisper
+      - whisper_models:/root/.cache/huggingface
     ports:
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9000:8000"
     networks:
       - fireform-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/docs')\" || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 60s
+      start_interval: 3s
 
   redis:
     image: redis:7-alpine
