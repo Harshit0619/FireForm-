@@ -74,6 +74,7 @@ LLM_PROVIDER_ENV = {
 
 WHISPER_HOST = os.getenv("WHISPER_HOST", "http://localhost:9000").rstrip("/")
 WHISPER_ENABLED = os.getenv("WHISPER_ENABLED", "true").lower() in ("true", "1", "yes")
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "Systran/faster-whisper-tiny")
 
 # --- Real-Time Streaming ASR -----------------------------------------------
 FIREFORM_STREAMING_ENABLED = os.getenv("FIREFORM_STREAMING_ENABLED", "true").lower() in ("true", "1", "yes")

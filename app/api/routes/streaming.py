@@ -18,7 +18,7 @@ from app.core.config import (
 from app.db.database import engine
 from app.models import Input
 from app.services import llm
-from app.services.whisper import check_whisper_available
+from app.services.whisper import call_whisper_asr, check_whisper_available
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +94,8 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
     - Client streams binary messages containing raw 16kHz mono 16-bit little-endian PCM audio.
     - Client sends text message '{"action": "stop"}' to finalize recording.
     - Server sends JSON messages:
-        {"type": "interim", "transcript": str, "translation": str}
-        {"type": "final", "transcript": str, "translation": str, "input_id": str}
+        {"type": "interim", "text": str, "transcript": str, "translation": str}
+        {"type": "final", "text": str, "transcript": str, "translation": str, "input_id": str}
         {"type": "error", "error_code": str, "message": str}
     """
     origin = websocket.headers.get("origin")
@@ -165,8 +165,8 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
         if not enable_translation or not text:
             return
         now = time.monotonic()
-        # Debounce: at least 0.8 seconds between LLM translation calls
-        if text != transcript_state["last_translated_text"] and (now - transcript_state["last_translation_time"] >= 0.8):
+        # Debounce: at least 1.5 seconds between LLM translation calls
+        if text != transcript_state["last_translated_text"] and (now - transcript_state["last_translation_time"] >= 1.5):
             transcript_state["last_translated_text"] = text
             transcript_state["last_translation_time"] = now
             translation = await _translate_text_to_english(text)
@@ -175,6 +175,7 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
                 try:
                     await websocket.send_json({
                         "type": "interim",
+                        "text": transcript_state["latest_transcript"],
                         "transcript": transcript_state["latest_transcript"],
                         "translation": transcript_state["latest_translation"],
                     })
@@ -190,7 +191,6 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
                 except Exception:
                     continue
 
-                # faster-whisper-server sends {"text": "..."} or {"segments": [{"text": "..."}]}
                 text = ""
                 if isinstance(data, dict):
                     if "text" in data and data["text"]:
@@ -202,11 +202,12 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
                     transcript_state["latest_transcript"] = text
                     await websocket.send_json({
                         "type": "interim",
+                        "text": text,
                         "transcript": text,
                         "translation": transcript_state["latest_translation"],
                     })
-                    # Schedule debounced translation
-                    asyncio.create_task(translate_debounced(text))
+                    if enable_translation:
+                        asyncio.create_task(translate_debounced(text))
 
         except websockets.ConnectionClosed:
             logger.debug("Upstream Whisper WebSocket closed")
@@ -241,23 +242,44 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
     except Exception as exc:
         logger.warning("Error reading from client WebSocket: %s", exc)
     finally:
-        # Stop upstream cleanly
         try:
             await upstream_ws.close()
         except Exception:
             pass
         upstream_task.cancel()
 
-    # Finalize transcription & translation
+    # Finalize transcription: if streaming produced a hypothesis, use it;
+    # otherwise transcribe accumulated PCM audio directly as fallback.
     final_transcript = transcript_state["latest_transcript"].strip()
-    final_translation = transcript_state["latest_translation"].strip()
 
+    if not final_transcript and accumulated_audio_bytes:
+        try:
+            loop = asyncio.get_running_loop()
+            raw_pcm = bytes(accumulated_audio_bytes)
+            # Create a simple WAV from the raw 16kHz mono PCM for REST ASR
+            import io
+            import wave
+            wav_io = io.BytesIO()
+            with wave.open(wav_io, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(raw_pcm)
+            wav_bytes = wav_io.getvalue()
+            final_transcript = await loop.run_in_executor(
+                None,
+                lambda: call_whisper_asr(wav_bytes, "recording.wav", "audio/wav"),
+            )
+            final_transcript = (final_transcript or "").strip()
+        except Exception as exc:
+            logger.warning("Fallback transcription failed: %s", exc)
+
+    final_translation = transcript_state["latest_translation"].strip()
     if enable_translation and final_transcript:
-        # Produce high-fidelity final translation if different from last interim
         if final_transcript != transcript_state["last_translated_text"] or not final_translation:
             final_translation = await _translate_text_to_english(final_transcript) or final_translation
 
-    # Persist canonical Input record into SQLite/Postgres
+    # Persist canonical Input record into database
     input_id = None
     if final_transcript:
         try:
@@ -276,10 +298,11 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
         except Exception as exc:
             logger.exception("Failed to persist final streaming input record: %s", exc)
 
-    # Send final packet if client connection is still open
+    # Send final packet to client
     try:
         await websocket.send_json({
             "type": "final",
+            "text": final_transcript,
             "transcript": final_transcript,
             "translation": final_translation,
             "input_id": input_id,
