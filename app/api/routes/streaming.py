@@ -14,11 +14,12 @@ from app.core.config import (
     ALLOWED_ORIGINS,
     FIREFORM_STREAMING_ENABLED,
     WHISPER_ENABLED,
+    WHISPER_LOCAL,
     WHISPER_WS_URL,
 )
 from app.db.database import engine
 from app.models import Input
-from app.services import llm
+from app.services import llm, whisper_local
 from app.services.whisper import call_whisper_asr, check_whisper_available
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,10 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
     query_str = websocket.scope.get("query_string", b"").decode("utf-8")
     query_params = parse_qs(query_str)
     enable_translation = query_params.get("translate", ["true"])[0].lower() in ("true", "1", "yes")
+
+    if WHISPER_LOCAL:
+        await _transcribe_locally(websocket)
+        return
 
     # Connect to upstream faster-whisper-server WebSocket
     try:
@@ -281,7 +286,11 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
         if final_transcript != transcript_state["last_translated_text"] or not final_translation:
             final_translation = await _translate_text_to_english(final_transcript) or final_translation
 
-    # Persist canonical Input record into database
+    await _finish(websocket, final_transcript, final_translation)
+
+
+async def _finish(websocket: WebSocket, final_transcript: str, final_translation: str) -> None:
+    """Save the transcript as an Input record and send the final packet."""
     input_id = None
     if final_transcript:
         try:
@@ -300,7 +309,6 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
         except Exception as exc:
             logger.exception("Failed to persist final streaming input record: %s", exc)
 
-    # Send final packet to client
     try:
         await websocket.send_json({
             "type": "final",
@@ -312,3 +320,59 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
         await websocket.close(code=1000)
     except Exception:
         pass
+
+
+# Seconds of new audio to wait for before running another interim pass.
+_LOCAL_INTERIM_STEP_SECONDS = 1.0
+
+
+async def _transcribe_locally(websocket: WebSocket) -> None:
+    """Same client protocol as the sidecar path, transcribed in this process."""
+    loop = asyncio.get_running_loop()
+    transcriber = whisper_local.StreamingTranscriber()
+    stopped = asyncio.Event()
+
+    async def send_interims() -> None:
+        heard = 0.0
+        while not stopped.is_set():
+            await asyncio.sleep(0.25)
+            buffered = transcriber.seconds_buffered
+            if buffered - heard < _LOCAL_INTERIM_STEP_SECONDS:
+                continue
+            heard = buffered
+            text = await loop.run_in_executor(None, transcriber.transcribe)
+            if text and not stopped.is_set():
+                await websocket.send_json({"type": "interim", "text": text, "transcript": text, "translation": ""})
+
+    interim_task = asyncio.create_task(send_interims())
+
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg.get("bytes"):
+                transcriber.feed(msg["bytes"])
+            elif msg.get("text"):
+                try:
+                    if json.loads(msg["text"]).get("action") == "stop":
+                        break
+                except json.JSONDecodeError:
+                    pass
+            elif msg.get("type") == "websocket.disconnect":
+                break
+    except WebSocketDisconnect:
+        logger.debug("Client disconnected from /ws/transcribe")
+    finally:
+        stopped.set()
+        # Let a pass that is already running finish: the model handles one at a time.
+        try:
+            await interim_task
+        except Exception as exc:
+            logger.warning("Local interim transcription failed: %s", exc)
+
+    final_transcript = ""
+    try:
+        final_transcript = await loop.run_in_executor(None, transcriber.transcribe)
+    except Exception as exc:
+        logger.warning("Local transcription failed: %s", exc)
+
+    await _finish(websocket, final_transcript, "")

@@ -83,6 +83,9 @@ LLM_PROVIDER_ENV = {
 }
 
 WHISPER_HOST = os.getenv("WHISPER_HOST", "http://localhost:9000").rstrip("/")
+# WHISPER_LOCAL transcribes inside this process (app/services/whisper_local.py) instead of
+# calling the sidecar at WHISPER_HOST. The desktop binary has no sidecar, so it is on there.
+WHISPER_LOCAL = os.getenv("WHISPER_LOCAL", "true" if FIREFORM_DESKTOP else "false").lower() in ("true", "1", "yes")
 WHISPER_ENABLED = os.getenv("WHISPER_ENABLED", "true").lower() in ("true", "1", "yes")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "Systran/faster-whisper-tiny")
 

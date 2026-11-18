@@ -266,3 +266,48 @@ class TestTranscribeAudioTask:
         assert "transcribing" in observed_statuses
         assert "ready" in observed_statuses
         assert observed_statuses.index("transcribing") < observed_statuses.index("ready")
+
+
+# ---------------------------------------------------------------------------
+# Whisper defaults: the sidecar in Docker, the in-process engine in the desktop build
+# ---------------------------------------------------------------------------
+
+class TestWhisperDefaults:
+
+    def _config(self, env):
+        import json
+        import os
+        import subprocess
+        import sys
+
+        managed = ("FIREFORM_DESKTOP", "WHISPER_ENABLED", "WHISPER_LOCAL")
+        clean = {k: v for k, v in os.environ.items() if k not in managed}
+        out = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import json; from app.core import config as c; "
+                "print(json.dumps({'enabled': c.WHISPER_ENABLED, 'local': c.WHISPER_LOCAL}))",
+            ],
+            env={**clean, **env},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return json.loads(out.stdout.strip().splitlines()[-1])
+
+    def test_docker_uses_the_sidecar(self):
+        assert self._config({}) == {"enabled": True, "local": False}
+
+    def test_desktop_uses_the_local_engine(self):
+        assert self._config({"FIREFORM_DESKTOP": "true"}) == {"enabled": True, "local": True}
+
+    def test_availability_check_skips_the_network_when_disabled(self, monkeypatch):
+        from app.services import whisper
+
+        def _no_network(*args, **kwargs):
+            raise AssertionError("Whisper should not be probed when it is disabled")
+
+        monkeypatch.setattr(whisper, "WHISPER_ENABLED", False)
+        monkeypatch.setattr(whisper.requests, "get", _no_network)
+        assert whisper.check_whisper_available() is False

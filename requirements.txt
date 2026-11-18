@@ -26,3 +26,4 @@ alembic
 reportlab
 slowapi
 websockets
+faster-whisper

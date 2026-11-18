@@ -55,3 +55,6 @@ dist/
 .pyinstaller_cache/
 *.spec.bak
 *.spec
+
+# Whisper model fetched for the desktop build (scripts/fetch_whisper_model.py)
+/models/

@@ -40,6 +40,9 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Fetch the Whisper model to bundle
+        run: python scripts/fetch_whisper_model.py
+
       - name: Build with PyInstaller
         run: pyinstaller --clean -y fireform-backend.spec
 
