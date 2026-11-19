@@ -13,7 +13,7 @@ import numpy as np
 from app.core.config import BASE_DIR
 
 SAMPLE_RATE = 16000
-MODEL_NAME = "small.en"
+MODEL_NAME = "small"
 # Fetched by scripts/fetch_whisper_model.py and bundled by fireform-backend.spec.
 MODEL_DIR = BASE_DIR / "models" / f"faster-whisper-{MODEL_NAME}"
 

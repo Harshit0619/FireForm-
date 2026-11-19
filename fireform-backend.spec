@@ -87,7 +87,7 @@ for package in ("faster_whisper", "ctranslate2"):
 hiddenimports += ["app.services.whisper_local"]
 
 # The model: run scripts/fetch_whisper_model.py before building.
-WHISPER_MODEL_SRC = os.path.join("models", "faster-whisper-small.en")
+WHISPER_MODEL_SRC = os.path.join("models", "faster-whisper-small")
 if not os.path.isfile(os.path.join(WHISPER_MODEL_SRC, "model.bin")):
     raise SystemExit("Whisper model missing: run `python scripts/fetch_whisper_model.py` first.")
 datas += [(WHISPER_MODEL_SRC, WHISPER_MODEL_SRC)]

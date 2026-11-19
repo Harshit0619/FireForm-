@@ -29,7 +29,7 @@ FireForm ships as a self-contained desktop application for Windows, macOS, and L
 | Task queue | Celery (in-process, eager) | No Redis; runs in the API process |
 | LLM inference | Ollama (host binary) | Auto-detected, started, or silently installed |
 | Default model | `qwen2.5:3b` | Auto-pulled on first run |
-| Voice input | faster-whisper, in-process | `small.en` model bundled in the binary; no Whisper sidecar needed |
+| Voice input | faster-whisper, in-process | `small` multilingual model bundled in the binary; no Whisper sidecar needed |
 
 All services bind exclusively to `127.0.0.1` — no LAN exposure.
 
