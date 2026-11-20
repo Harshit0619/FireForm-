@@ -1,12 +1,16 @@
 import requests
 
-from app.core.config import WHISPER_HOST, WHISPER_MODEL
+from app.core.config import WHISPER_ENABLED, WHISPER_HOST, WHISPER_LOCAL, WHISPER_MODEL
+from app.services import whisper_local
 
 _whisper_api_mode: str | None = None
 
 
 def call_whisper_asr(audio_bytes: bytes, filename: str, content_type: str) -> str:
-    """Post audio to the Whisper ASR sidecar and return the transcript.
+    """Transcribe audio and return the text.
+
+    With WHISPER_LOCAL the audio is transcribed in this process. Otherwise it is posted
+    to the Whisper ASR sidecar.
 
     Supports both legacy /asr endpoints (onerahmet) and OpenAI-compatible
     endpoints (/v1/audio/transcriptions) for faster-whisper-server.
@@ -15,6 +19,9 @@ def call_whisper_asr(audio_bytes: bytes, filename: str, content_type: str) -> st
     other HTTP failure. Callers map these to their own error codes.
     """
     global _whisper_api_mode
+
+    if WHISPER_LOCAL:
+        return whisper_local.transcribe_bytes(audio_bytes)
 
     # If known to be v1, skip legacy attempt
     if _whisper_api_mode != "v1":
@@ -67,7 +74,11 @@ def call_whisper_asr(audio_bytes: bytes, filename: str, content_type: str) -> st
 
 
 def check_whisper_available() -> bool:
-    """Return True if the Whisper sidecar responds with a successful status."""
+    """Return True if Whisper is enabled and its engine (local or sidecar) can be used."""
+    if not WHISPER_ENABLED:
+        return False
+    if WHISPER_LOCAL:
+        return whisper_local.is_available()
     for path in ("/docs", "/health", "/v1/models", ""):
         try:
             resp = requests.get(f"{WHISPER_HOST}{path}", timeout=2)

@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_submodules
+import os
+
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
 
@@ -75,10 +77,25 @@ hiddenimports = [
 hiddenimports += collect_submodules("celery")
 hiddenimports += collect_submodules("kombu")
 
+# Local speech-to-text: the faster-whisper engine and its native CTranslate2 library.
+binaries = []
+for package in ("faster_whisper", "ctranslate2"):
+    pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
+    datas += pkg_datas
+    binaries += pkg_binaries
+    hiddenimports += pkg_hidden
+hiddenimports += ["app.services.whisper_local"]
+
+# The model: run scripts/fetch_whisper_model.py before building.
+WHISPER_MODEL_SRC = os.path.join("models", "faster-whisper-small")
+if not os.path.isfile(os.path.join(WHISPER_MODEL_SRC, "model.bin")):
+    raise SystemExit("Whisper model missing: run `python scripts/fetch_whisper_model.py` first.")
+datas += [(WHISPER_MODEL_SRC, WHISPER_MODEL_SRC)]
+
 a = Analysis(
     ["app/desktop.py"],
     pathex=["."],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -93,6 +110,8 @@ a = Analysis(
         "cv2",
         "scipy",
         "pytest",
+        # faster-whisper only needs this for its optional silence filter, which we do not use.
+        "onnxruntime",
         "IPython",
     ],
     win_no_prefer_redirects=False,

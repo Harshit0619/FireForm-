@@ -29,7 +29,7 @@ FireForm ships as a self-contained desktop application for Windows, macOS, and L
 | Task queue | Celery (in-process, eager) | No Redis; runs in the API process |
 | LLM inference | Ollama (host binary) | Auto-detected, started, or silently installed |
 | Default model | `qwen2.5:3b` | Auto-pulled on first run |
-| Voice input | Disabled | Whisper not bundled in desktop mode |
+| Voice input | faster-whisper, in-process | `small` multilingual model bundled in the binary; no Whisper sidecar needed |
 
 All services bind exclusively to `127.0.0.1` — no LAN exposure.
 
@@ -150,9 +150,10 @@ To build the backend binary locally:
 
 ```bash
 cd FireForm
+.venv/bin/python scripts/fetch_whisper_model.py   # Whisper model the binary bundles (~490 MB)
 PYINSTALLER_CONFIG_DIR=./.pyinstaller_cache \
 .venv/bin/pyinstaller fireform-backend.spec --noconfirm
-# Output: dist/api-backend  (~70 MB)
+# Output: dist/api-backend  (~600 MB)
 ```
 
 To run the full Electron app in dev mode (backend not needed if using Docker):
@@ -179,7 +180,7 @@ npm run dev
 - All services (`FastAPI`, `Ollama`) bind to `127.0.0.1` only — no LAN or internet exposure.
 - The SQLite database is stored in the OS user profile directory — not world-readable on standard OS permission models.
 - Ollama model weights stay in the host-native Ollama model directory (not inside the app bundle).
-- `FIREFORM_DESKTOP=true` disables Whisper — no microphone access is requested in desktop mode.
+- Voice is transcribed inside the backend process with a bundled model; audio never leaves the machine.
 
 ---
 
@@ -188,7 +189,6 @@ npm run dev
 | Symptom | Likely cause | Fix |
 |:---|:---|:---|
 | App launches but shows "Cannot reach backend" | Binary failed to start | Check Electron console logs (View → Toggle Dev Tools) |
-| `GET /api/v1/health` returns degraded | Whisper check — expected | Whisper is disabled in desktop mode; health still returns `healthy` |
 | Ollama model pull not triggered | Ollama not reachable within 30 s | Ensure Ollama app is not blocked by firewall; relaunch app |
 | Database error on startup | Corrupted or locked `.db` file | Delete `{userData}/data/fireform.db` to reset (data loss) |
 | `api-backend` permission denied on Linux | Binary not executable | `chmod +x bin/api-backend` |
