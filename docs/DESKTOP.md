@@ -83,8 +83,8 @@ Trigger: push a tag matching `v*` to `fireform-core/FireForm`.
 Workflow: [`.github/workflows/build-desktop-binaries.yml`](../.github/workflows/build-desktop-binaries.yml)
 
 ```bash
-git tag v1.1.1
-git push origin v1.1.1
+git tag v1.1.2
+git push origin v1.1.2
 ```
 
 The workflow builds a PyInstaller binary on each platform runner:
