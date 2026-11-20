@@ -17,7 +17,7 @@ else:
 
 # --- App metadata ---------------------------------------------------------
 APP_TITLE = "FireForm API"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 
 # --- Desktop Mode ---------------------------------------------------------
 FIREFORM_DESKTOP = os.getenv("FIREFORM_DESKTOP", "false").lower() in ("true", "1", "yes")
